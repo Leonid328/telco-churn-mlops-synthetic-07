@@ -1,0 +1,188 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecommerce
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recommender-config
+  namespace: ecommerce
+data:
+  MODEL_VERSION: "1.0.0"
+  LOG_LEVEL: "INFO"
+  ML_SERVICE_URL: "http://recommender-svc:80"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommender
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: recommender
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: recommender
+    spec:
+      containers:
+      - name: api
+        image: docker.io/library/churn-predictor:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: recommender-config
+              key: LOG_LEVEL
+        - name: MODEL_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: recommender-config
+              key: MODEL_VERSION
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommender-svc
+  namespace: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    app: recommender
+  ports:
+  - port: 80
+    targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-ingress
+  namespace: ecommerce
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  rules:
+  - host: ecommerce.local
+    http:
+      paths:
+      - path: /predict
+        pathType: Prefix
+        backend:
+          service:
+            name: recommender-svc
+            port:
+              number: 80
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: recommender-svc
+            port:
+              number: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: recommender-hpa
+  namespace: ecommerce
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: recommender
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: llm-secrets
+  namespace: ecommerce
+type: Opaque
+stringData:
+  openai_api_key: "placeholder-not-set"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-agent-service
+  namespace: ecommerce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecommerce-agent
+  template:
+    metadata:
+      labels:
+        app: ecommerce-agent
+    spec:
+      containers:
+      - name: agent
+        image: docker.io/library/churn-agent:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8002
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: llm-secrets
+              key: openai_api_key
+        - name: ML_SERVICE_URL
+          value: http://recommender-svc:80
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 8
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecommerce-agent-svc
+  namespace: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    app: ecommerce-agent
+  ports:
+  - port: 80
+    targetPort: 8002

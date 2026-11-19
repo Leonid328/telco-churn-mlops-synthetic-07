@@ -1,0 +1,25 @@
+NAME                                           READY   STATUS        RESTARTS   AGE
+pod/ecommerce-agent-service-56897c7849-tlms8   1/1     Running       0          22s
+pod/recommender-5b5854dff6-b99rn               1/1     Running       0          22s
+pod/recommender-5b5854dff6-f9svm               1/1     Running       0          22s
+pod/recommender-5b5854dff6-rw2dp               1/1     Terminating   0          9s
+pod/recommender-5b5854dff6-sxgnl               1/1     Terminating   0          9s
+pod/recommender-5b5854dff6-x6p2l               1/1     Terminating   0          9s
+
+NAME                          TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+service/ecommerce-agent-svc   ClusterIP   10.43.73.126    <none>        80/TCP    22s
+service/recommender-svc       ClusterIP   10.43.241.110   <none>        80/TCP    22s
+
+NAME                                      READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/ecommerce-agent-service   1/1     1            1           22s
+deployment.apps/recommender               2/2     2            2           22s
+
+NAME                                                 DESIRED   CURRENT   READY   AGE
+replicaset.apps/ecommerce-agent-service-56897c7849   1         1         1       22s
+replicaset.apps/recommender-5b5854dff6               2         2         2       22s
+
+NAME                                                  REFERENCE                TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/recommender-hpa   Deployment/recommender   cpu: <unknown>/70%   2         6         5          22s
+
+NAME                                          CLASS    HOSTS             ADDRESS          PORTS   AGE
+ingress.networking.k8s.io/ecommerce-ingress   <none>   ecommerce.local   168.231.116.71   80      22s
